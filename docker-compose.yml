@@ -1,5 +1,5 @@
 services:
   checkapi:
-    build: giga-webcheck-api
+    image: giga-webcheck-api
     ports:
       - "8086:3000"
