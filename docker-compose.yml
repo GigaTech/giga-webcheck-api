@@ -5,6 +5,6 @@ services:
       - "8086:3000"
     volumes:
       - data:/
-# volumes:
-#   giga-webcheck-api:
+volumes:
+  data:
 #     driver: local
