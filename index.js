@@ -1,5 +1,5 @@
 
-const ver = "0.1.005"
+const script_ver = "0.1.005"
 const dtNow = Date.now()
 
 const express = require('express');
@@ -173,7 +173,7 @@ app.get('/check', async (req, res) => {
 
   return res.json({
 
-    version: ver,
+	version: script_ver,
     checked_at: dtNow,
     site: site,
 
