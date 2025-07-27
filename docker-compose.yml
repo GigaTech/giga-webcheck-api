@@ -1,12 +1,9 @@
 services:
   giga-webcheck-api:
-    image: giga-webcheck-api:v3
+    build: giga-webcheck-api
     ports:
-      - "8086:3000"
+      - "8087:3000"
     volumes:
-      # - app:/app
-      - app2:/home/node/app
+      - app:/bin/sh
 volumes:
-  # app:
-  app2:
-#     driver: local
+  app:
