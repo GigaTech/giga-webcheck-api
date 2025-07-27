@@ -1,91 +1,162 @@
 const express = require('express');
+const dns = require('dns').promises;
 const https = require('https');
 const http = require('http');
 const tls = require('tls');
-const dns = require('dns').promises;
-const morgan = require('morgan');
-const rateLimit = require('express-rate-limit');
+const url = require('url');
 
 const app = express();
+const port = process.env.PORT || 3000;
 
-// Logging middleware
-app.use(morgan(':method :url :status :res[content-length] - :response-time ms'));
+async function getSSLInfo(hostname, port = 443) {
+  return new Promise((resolve) => {
+    const socket = tls.connect(
+      port,
+      hostname,
+      { servername: hostname, rejectUnauthorized: false },
+      () => {
+        const cert = socket.getPeerCertificate();
+        socket.end();
+        resolve({
+          subject: cert.subject,
+          issuer: cert.issuer,
+          valid_from: cert.valid_from,
+          valid_to: cert.valid_to,
+          days_until_expiry: Math.ceil((new Date(cert.valid_to) - Date.now()) / (1000 * 60 * 60 * 24)),
+        });
+      }
+    );
 
-// Rate limiting: max 100 requests per 15 minutes per IP
-app.use(rateLimit({
-	windowMs: 15 * 60 * 1000,
-	max: 100,
-	standardHeaders: 'draft-8',
-	legacyHeaders: false
-}));
-
-async function checkSslExpiry(hostname) {
-	return new Promise((resolve) => {
-		const sock = tls.connect(443, hostname, { servername: hostname, rejectUnauthorized: false }, () => {
-			const cert = sock.getPeerCertificate();
-			sock.end();
-			if (!cert.valid_to) return resolve({ validTo: null, daysRemaining: null });
-			const validTo = new Date(cert.valid_to);
-			const daysRemaining = Math.floor((validTo - Date.now()) / (1000 * 60 * 60 * 24));
-			resolve({ validTo: validTo.toISOString(), daysRemaining });
-		});
-		sock.on('error', () => resolve({ validTo: null, daysRemaining: null }));
-	});
+    socket.on('error', (err) => {
+      resolve({ error: err.message });
+    });
+  });
 }
 
-async function resolveDnsRecords(hostname) {
-	const res = {};
-	try { res.A = await dns.resolve4(hostname); } catch (_) { res.A = []; }
-	try { res.AAAA = await dns.resolve6(hostname); } catch (_) { res.AAAA = []; }
-	try { res.CNAME = await dns.resolveCname(hostname); } catch (_) { res.CNAME = []; }
-	try { res.MX = await dns.resolveMx(hostname); } catch (_) { res.MX = []; }
-	try { res.TXT = await dns.resolveTxt(hostname); } catch (_) { res.TXT = []; }
-	try { res.NS = await dns.resolveNs(hostname); } catch (_) { res.NS = []; }
+async function getDNSRecords(hostname) {
+  const result = {};
 
-	// PTR reverse DNS for each IP
-	const ptrs = {};
-	for (const ip of [...res.A, ...res.AAAA]) {
-		try {
-			const names = await dns.reverse(ip);
-			ptrs[ip] = names;
-		} catch (_) { ptrs[ip] = []; }
-	}
-	res.PTR = ptrs;
+  try {
+    result.A = await dns.resolve4(hostname);
+  } catch (e) {
+    result.A = [`Error: ${e.code}`];
+  }
 
-	// extract policy records
-	const flatTxt = res.TXT.flat();
-	res.SPF = flatTxt.filter(t => t.toLowerCase().includes('v=spf1'));
-	res.DKIM = flatTxt.filter(t => t.toLowerCase().includes('dkim'));
-	res.DMARC = flatTxt.filter(t => t.toLowerCase().includes('v=dmarc1'));
-	
-	return res;
+  try {
+    result.AAAA = await dns.resolve6(hostname);
+  } catch (e) {
+    result.AAAA = [`Error: ${e.code}`];
+  }
+
+  try {
+    result.CNAME = await dns.resolveCname(hostname);
+  } catch (e) {
+    result.CNAME = [`Error: ${e.code}`];
+  }
+
+  try {
+    result.MX = await dns.resolveMx(hostname);
+  } catch (e) {
+    result.MX = [`Error: ${e.code}`];
+  }
+
+  try {
+    result.TXT = await dns.resolveTxt(hostname);
+  } catch (e) {
+    result.TXT = [`Error: ${e.code}`];
+  }
+
+  try {
+    result.NS = await dns.resolveNs(hostname);
+  } catch (e) {
+    result.NS = [`Error: ${e.code}`];
+  }
+
+  try {
+    const ptrs = {};
+    if (result.A && Array.isArray(result.A)) {
+      for (const ip of result.A) {
+        try {
+          ptrs[ip] = await dns.reverse(ip);
+        } catch (e) {
+          ptrs[ip] = [`Reverse Error: ${e.code}`];
+        }
+      }
+    }
+    result.PTR = ptrs;
+  } catch (e) {
+    result.PTR = [`PTR Error: ${e.code}`];
+  }
+
+  try {
+    result.ALL = await dns.resolveAny(hostname);
+  } catch (e) {
+    result.ALL = [`Error: ${e.code}`];
+  }
+
+  return result;
+}
+
+async function fetchSite(urlStr) {
+  const parsedUrl = url.parse(urlStr);
+  const isHttps = parsedUrl.protocol === 'https:';
+  const hostname = parsedUrl.hostname;
+
+  return new Promise((resolve) => {
+    const start = Date.now();
+    const lib = isHttps ? https : http;
+
+    const req = lib.get(urlStr, (res) => {
+      const time = Date.now() - start;
+      res.resume();
+      resolve({
+        url: urlStr,
+        statusCode: res.statusCode,
+        responseTimeMs: time,
+      });
+    });
+
+    req.on('error', (e) => {
+      resolve({
+        url: urlStr,
+        error: e.message,
+      });
+    });
+
+    req.setTimeout(10000, () => {
+      req.destroy();
+      resolve({
+        url: urlStr,
+        error: 'Timeout after 10s',
+      });
+    });
+  });
 }
 
 app.get('/check', async (req, res) => {
-	const { url } = req.query;
-	if (!url) return res.status(400).json({ error: 'Missing url parameter' });
+  const site = req.query.site;
+  if (!site) {
+    return res.status(400).json({ error: 'Missing "site" query param' });
+  }
 
-	const parsed = new URL(url);
-	const mod = parsed.protocol === 'https:' ? https : http;
-	const hostname = parsed.hostname;
+  const urlToTest = site.startsWith('http') ? site : `https://${site}`;
+  const hostname = url.parse(urlToTest).hostname;
 
-	const t0 = Date.now();
-	mod.get(url, async (resp) => {
-		const t1 = Date.now();
-		const ssl = parsed.protocol === 'https:' ? await checkSslExpiry(hostname) : null;
-		const dnsRecords = await resolveDnsRecords(hostname);
+  const [httpInfo, sslInfo, dnsInfo] = await Promise.all([
+    fetchSite(urlToTest),
+    getSSLInfo(hostname),
+    getDNSRecords(hostname),
+  ]);
 
-		res.json({
-			url,
-			statusCode: resp.statusCode,
-			responseTimeMs: t1 - t0,
-			ssl,
-			dns: dnsRecords
-		});
-	}).on('error', async (err) => {
-		const dnsRecords = await resolveDnsRecords(hostname);
-		res.status(500).json({ url, error: err.message, dns: dnsRecords });
-	});
+  return res.json({
+    site: site,
+    checked_at: new Date().toISOString(),
+    HTTP: httpInfo,
+    SSL: sslInfo,
+    DNS: dnsInfo,
+  });
 });
 
-app.listen(3000, () => console.log('Check API listening on port 3000'));
+app.listen(port, () => {
+  console.log(`Webcheck API listening on port ${port}`);
+});

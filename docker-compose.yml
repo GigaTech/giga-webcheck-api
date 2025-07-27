@@ -1,5 +1,10 @@
 services:
-  checkapi:
+  giga-webcheck-api:
     image: giga-webcheck-api
     ports:
       - "8086:3000"
+    volumes:
+      - app:/app
+volumes:
+  giga-webcheck-api:
+    driver: local
