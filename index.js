@@ -177,21 +177,21 @@ app.get('/check', async (req, res) => {
     checked_at: dtNow,
     site: site,
 
-    HTTP: {
-      HTTP: httpInfo,
-    },
+    // HTTP: {
+    //   HTTP: httpInfo,
+    // },
 
-    SSL: {
-      SSL: sslInfo,
-    },
+    // SSL: {
+    //   SSL: sslInfo,
+    // },
 
-    DNS1: {
-      DNS: dnsInfo1,
-    },
+    // DNS1: {
+    //   DNS: dnsInfo1,
+    // },
 
-    DNS2: {
-      DNS: dnsInfo2,
-    }
+    // DNS2: {
+    //   DNS: dnsInfo2,
+    // }
 
   });
 
