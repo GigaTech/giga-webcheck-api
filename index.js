@@ -1,3 +1,7 @@
+
+const ver = "0.1.005"
+const dtNow = Date.now()
+
 const express = require('express');
 const dns = require('dns').promises;
 const https = require('https');
@@ -7,6 +11,46 @@ const url = require('url');
 
 const app = express();
 const port = process.env.PORT || 3000;
+
+
+
+async function fetchSite(urlStr) {
+  const parsedUrl = url.parse(urlStr);
+  const isHttps = parsedUrl.protocol === 'https:';
+  const hostname = parsedUrl.hostname;
+
+  return new Promise((resolve) => {
+    const start = Date.now();
+    const lib = isHttps ? https : http;
+
+    const req = lib.get(urlStr, (res) => {
+      const time = Date.now() - start;
+      res.resume();
+      resolve({
+        url: urlStr,
+        statusCode: res.statusCode,
+        responseTimeMs: time,
+      });
+    });
+
+    req.on('error', (e) => {
+      resolve({
+        url: urlStr,
+        error: e.message,
+      });
+    });
+
+    req.setTimeout(10000, () => {
+      req.destroy();
+      resolve({
+        url: urlStr,
+        error: 'Timeout after 10s',
+      });
+    });
+  });
+}
+
+
 
 async function getSSLInfo(hostname, port = 443) {
   return new Promise((resolve) => {
@@ -33,7 +77,9 @@ async function getSSLInfo(hostname, port = 443) {
   });
 }
 
-async function getDNSRecords(hostname) {
+
+
+async function getDNSRecords1(hostname) {
   const result = {};
 
   try {
@@ -88,6 +134,14 @@ async function getDNSRecords(hostname) {
     result.PTR = [`PTR Error: ${e.code}`];
   }
 
+  return result;
+}
+
+
+
+async function getDNSRecords2(hostname) {
+  const result = {};
+
   try {
     result.ALL = await dns.resolveAny(hostname);
   } catch (e) {
@@ -97,41 +151,7 @@ async function getDNSRecords(hostname) {
   return result;
 }
 
-async function fetchSite(urlStr) {
-  const parsedUrl = url.parse(urlStr);
-  const isHttps = parsedUrl.protocol === 'https:';
-  const hostname = parsedUrl.hostname;
 
-  return new Promise((resolve) => {
-    const start = Date.now();
-    const lib = isHttps ? https : http;
-
-    const req = lib.get(urlStr, (res) => {
-      const time = Date.now() - start;
-      res.resume();
-      resolve({
-        url: urlStr,
-        statusCode: res.statusCode,
-        responseTimeMs: time,
-      });
-    });
-
-    req.on('error', (e) => {
-      resolve({
-        url: urlStr,
-        error: e.message,
-      });
-    });
-
-    req.setTimeout(10000, () => {
-      req.destroy();
-      resolve({
-        url: urlStr,
-        error: 'Timeout after 10s',
-      });
-    });
-  });
-}
 
 app.get('/check', async (req, res) => {
   const site = req.query.site;
@@ -145,17 +165,41 @@ app.get('/check', async (req, res) => {
   const [httpInfo, sslInfo, dnsInfo] = await Promise.all([
     fetchSite(urlToTest),
     getSSLInfo(hostname),
-    getDNSRecords(hostname),
+    getDNSRecords1(hostname),
+    getDNSRecords2(hostname),
   ]);
 
+
+
   return res.json({
+
+    version: ver,
+    checked_at: dtNow,
     site: site,
-    checked_at: new Date().toISOString(),
-    HTTP: httpInfo,
-    SSL: sslInfo,
-    DNS: dnsInfo,
+
+    HTTP: {
+      HTTP: httpInfo,
+    },
+
+    SSL: {
+      SSL: sslInfo,
+    },
+
+    DNS1: {
+      DNS: dnsInfo1,
+    },
+
+    DNS2: {
+      DNS: dnsInfo2,
+    }
+
   });
+
+
+
 });
+
+
 
 app.listen(port, () => {
   console.log(`Webcheck API listening on port ${port}`);
