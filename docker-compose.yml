@@ -1,6 +1,6 @@
 services:
   giga-webcheck-api:
-    build: giga-webcheck-api
+    image: giga-webcheck-api:v3
     ports:
       - "8086:3000"
     volumes:

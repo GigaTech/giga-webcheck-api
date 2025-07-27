@@ -1,5 +1,5 @@
 
-const script_ver = "0.1.005"
+const script_ver = "0.1.006"
 const dtNow = Date.now()
 
 const express = require('express');
@@ -159,31 +159,31 @@ app.get('/check', async (req, res) => {
 		return res.status(400).json({ error: 'Missing "url" query param' });
   }
 
-  const urlToTest = url.startsWith('http') ? url : `https://${url}`;
-  const hostname = url.parse(urlToTest).hostname;
+  // const urlToTest = url.startsWith('http') ? url : `https://${url}`;
+  // const hostname = url.parse(urlToTest).hostname;
 
-  const [httpInfo, sslInfo, dnsInfo] = await Promise.all([
-    fetchSite(urlToTest),
-    getSSLInfo(hostname),
-    getDNSRecords1(hostname),
-    getDNSRecords2(hostname),
-  ]);
+  // const [httpInfo, sslInfo, dnsInfo] = await Promise.all([
+  //   fetchSite(urlToTest),
+  //   getSSLInfo(hostname),
+  //   getDNSRecords1(hostname),
+  //   getDNSRecords2(hostname),
+  // ]);
 
 
 
   return res.json({
-
-	version: script_ver,
+	
+    version: script_ver,
     checked_at: dtNow,
     url: url,
 
-    // HTTP: {
-    //   HTTP: httpInfo,
-    // },
+    HTTP: {
+      HTTP: httpInfo,
+    },
 
-    // SSL: {
-    //   SSL: sslInfo,
-    // },
+    SSL: {
+      SSL: sslInfo,
+    },
 
     // DNS1: {
     //   DNS: dnsInfo1,
