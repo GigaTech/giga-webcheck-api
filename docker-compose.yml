@@ -4,7 +4,9 @@ services:
     ports:
       - "8086:3000"
     volumes:
-      - data:/data
+      # - app:/app
+      - app2:/home/node/app
 volumes:
-  data:
+  # app:
+  app2:
 #     driver: local

@@ -154,12 +154,12 @@ async function getDNSRecords2(hostname) {
 
 
 app.get('/check', async (req, res) => {
-  const site = req.query.site;
-  if (!site) {
-    return res.status(400).json({ error: 'Missing "site" query param' });
+	const url = req.query.url;
+	if (!url) {
+		return res.status(400).json({ error: 'Missing "url" query param' });
   }
 
-  const urlToTest = site.startsWith('http') ? site : `https://${site}`;
+  const urlToTest = url.startsWith('http') ? url : `https://${url}`;
   const hostname = url.parse(urlToTest).hostname;
 
   const [httpInfo, sslInfo, dnsInfo] = await Promise.all([
@@ -175,7 +175,7 @@ app.get('/check', async (req, res) => {
 
 	version: script_ver,
     checked_at: dtNow,
-    site: site,
+    url: url,
 
     // HTTP: {
     //   HTTP: httpInfo,
