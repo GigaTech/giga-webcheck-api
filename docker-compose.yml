@@ -1,10 +1,9 @@
 services:
   giga-webcheck-api:
-    image: GigaTech/giga-webcheck-api
+    image: giga-webcheck-api
     ports:
       - "8087:3000"
     volumes:
       - app:/bin/sh
 volumes:
   app:
-  

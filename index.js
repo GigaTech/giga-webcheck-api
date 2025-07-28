@@ -185,7 +185,7 @@ app.get('/check', async (req, res) => {
       SSL: sslInfo,
     },
 
-    
+
     // DNS1: {
     //   DNS: dnsInfo1,
     // },
@@ -203,5 +203,5 @@ app.get('/check', async (req, res) => {
 
 
 app.listen(port, () => {
-  console.log(`Webcheck API listening on port ${port}`);
+  console.log(`GigaTech Webcheck API listening on port ${port}`);
 });
